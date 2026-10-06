@@ -16,34 +16,31 @@ async function performRefresh(): Promise<boolean> {
   if (!refreshToken) {
     return false;
   }
-  try {
-    const currentApiUrl = await getApiUrl();
-    const response = await fetch(currentApiUrl + 'auth/refresh', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ refreshToken })
-    });
-    if (!response.ok) {
-      await clearTokens();
-      return false;
-    }
-    const data = await response.json();
-    if (!data?.accessToken) {
-      await clearTokens();
-      return false;
-    }
-    await AsyncStorage.setItem('accessToken', data.accessToken);
-    if (data.refreshToken) {
-      await AsyncStorage.setItem('refreshToken', data.refreshToken);
-    }
-    return true;
-  } catch {
+  const currentApiUrl = await getApiUrl();
+  // Network errors and 5xx propagate and keep the tokens: being offline is not a logout.
+  const response = await trackedFetch(currentApiUrl + 'auth/refresh', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ refreshToken })
+  });
+  if (response.status >= 500) {
+    const err = new Error('refresh_failed');
+    (err as any).status = response.status;
+    throw err;
+  }
+  const data = response.ok ? await response.json() : null;
+  if (!data?.accessToken) {
     await clearTokens();
     return false;
   }
+  await AsyncStorage.setItem('accessToken', data.accessToken);
+  if (data.refreshToken) {
+    await AsyncStorage.setItem('refreshToken', data.refreshToken);
+  }
+  return true;
 }
 
 export function refreshAccessToken(): Promise<boolean> {
@@ -57,6 +54,27 @@ export function refreshAccessToken(): Promise<boolean> {
 
 function isRefreshRequest(url: string): boolean {
   return url.replace(/\/+$/, '').endsWith('/auth/refresh');
+}
+
+let onReachabilityChange: ((reachable: boolean) => void) | null = null;
+
+export function setReachabilityHandler(
+  handler: (reachable: boolean) => void
+): void {
+  onReachabilityChange = handler;
+}
+
+// Every request reports whether the backend answered. A 502 is nginx with the API down.
+async function trackedFetch(url: string, init: RequestInit): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (err) {
+    onReachabilityChange?.(false);
+    throw err;
+  }
+  onReachabilityChange?.(response.status !== 502);
+  return response;
 }
 
 let onConflictError: (() => void) | null = null;
@@ -73,7 +91,7 @@ async function doFetch<T>(
   options: Options,
   retried: boolean
 ): Promise<T> {
-  const response = await fetch(url, {
+  const response = await trackedFetch(url, {
     headers: await authHeader(false),
     ...options
   });

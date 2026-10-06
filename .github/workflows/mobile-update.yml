@@ -1,11 +1,7 @@
 name: EAS Update
+# Upstream Atlas workflow. Manual only in this fork: it needs upstream's secrets.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'mobile/**'
-      - '.github/workflows/mobile-update.yml'
+  workflow_dispatch:
 
 env:
   GIT_SHA: ${{ github.sha }}

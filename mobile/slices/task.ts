@@ -86,6 +86,7 @@ export const getTasks =
     try {
       const tasks = await api.get<Task[]>(`${basePath}/work-order/${id}`);
       dispatch(slice.actions.getTasks({ id, tasks }));
+      return tasks;
     } catch {
     } finally {
       dispatch(slice.actions.setLoadingByTask({ id, loading: false }));

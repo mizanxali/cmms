@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import useAuth from '../../hooks/useAuth';
 import { PermissionEntity } from '../../models/role';
 import WorkOrder from '../../models/workOrder';
+import { useSelector } from '../../store';
 import CustomActionSheet, {
   CustomActionSheetOption
 } from './CustomActionSheet';
@@ -15,13 +16,23 @@ export default function WorkOrderDetailsSheet(
     onGenerateReport: () => void;
     onOpenArchive: () => void;
     onDelete: () => void;
+    onOfflineHandoff: () => void;
     workOrder: WorkOrder;
   }>
 ) {
   const { t } = useTranslation();
   const { hasEditPermission, hasDeletePermission } = useAuth();
   const theme = useTheme();
+  const hasCrew = useSelector(
+    (state) => !!state.offline.packs[props.payload.workOrder.id]?.crew.length
+  );
   const options: CustomActionSheetOption[] = [
+    {
+      title: t('offline_handoff'),
+      icon: 'bluetooth-transfer',
+      onPress: props.payload.onOfflineHandoff,
+      visible: hasCrew
+    },
     {
       title: t('edit'),
       icon: 'pencil',

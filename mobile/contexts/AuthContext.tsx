@@ -8,8 +8,13 @@ import {
   useState
 } from 'react';
 import { OwnUser, UserResponseDTO } from '../models/user';
-import api, { authHeader, refreshAccessToken } from '../utils/api';
+import api, {
+  authHeader,
+  isNetworkError,
+  refreshAccessToken
+} from '../utils/api';
 import { verify } from '../utils/jwt';
+import { serializePermissionRequest } from '../utils/permissionQueue';
 import { Alert, AppState, Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -274,6 +279,9 @@ const initialAuthState: AuthState = {
   reviewEligible: false
 };
 
+// Last signed-in user and company, used to open the app without a backend.
+const OFFLINE_AUTH_CACHE = 'offlineAuthCache';
+
 const setSession = (
   accessToken: string | null,
   refreshToken: string | null
@@ -283,6 +291,7 @@ const setSession = (
   } else {
     AsyncStorage.removeItem('accessToken');
     AsyncStorage.removeItem('companyId');
+    AsyncStorage.removeItem(OFFLINE_AUTH_CACHE);
   }
   if (refreshToken) {
     AsyncStorage.setItem('refreshToken', refreshToken);
@@ -633,7 +642,9 @@ export const AuthProvider: FC<AuthProviderProps> = (props) => {
         await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
       if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
+        const { status } = await serializePermissionRequest(() =>
+          Notifications.requestPermissionsAsync()
+        );
         finalStatus = status;
       }
       if (finalStatus !== 'granted') {
@@ -667,7 +678,9 @@ export const AuthProvider: FC<AuthProviderProps> = (props) => {
       await Notifications.getPermissionsAsync();
 
     if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
+      const { status } = await serializePermissionRequest(() =>
+        Notifications.requestPermissionsAsync()
+      );
 
       if (status === 'granted') {
         registerForPushNotificationsAsync().then((token) =>
@@ -739,6 +752,13 @@ export const AuthProvider: FC<AuthProviderProps> = (props) => {
       console.error('Review eligibility check failed', e);
     }
   };
+  const cacheAuth = (user: UserResponseDTO, company: Company) =>
+    AsyncStorage.setItem(OFFLINE_AUTH_CACHE, JSON.stringify({ user, company }));
+  const getCachedAuth = async (): Promise<{
+    user?: UserResponseDTO;
+    company?: Company;
+    userSettings?: UserSettings;
+  } | null> => JSON.parse(await AsyncStorage.getItem(OFFLINE_AUTH_CACHE));
   const getInfos = async (): Promise<void> => {
     // AsyncStorage.clear();
 
@@ -763,6 +783,7 @@ export const AuthProvider: FC<AuthProviderProps> = (props) => {
         const user = await updateUserInfos();
         const company = await api.get<Company>(`companies/${user.companyId}`);
         await setupUser(user, company.companySettings);
+        cacheAuth(user, company);
         dispatch({
           type: 'INITIALIZE',
           payload: {
@@ -784,6 +805,29 @@ export const AuthProvider: FC<AuthProviderProps> = (props) => {
         });
       }
     } catch (err) {
+      const cached = await getCachedAuth();
+      if (
+        isNetworkError(err) &&
+        cached?.user &&
+        (await AsyncStorage.getItem('accessToken'))
+      ) {
+        const { user, company } = cached;
+        switchLanguage({
+          lng:
+            user.language?.toLowerCase() ||
+            company.companySettings.generalPreferences.language.toLowerCase()
+        });
+        dispatch({
+          type: 'INITIALIZE',
+          payload: {
+            isAuthenticated: true,
+            user,
+            companySettings: company.companySettings,
+            company
+          }
+        });
+        return;
+      }
       console.error(err);
       dispatch({
         type: 'INITIALIZE',
@@ -809,6 +853,7 @@ export const AuthProvider: FC<AuthProviderProps> = (props) => {
     const user = await updateUserInfos();
     const company = await api.get<Company>(`companies/${user.companyId}`);
     await setupUser(user, company.companySettings);
+    cacheAuth(user, company);
     dispatch({
       type: 'LOGIN',
       payload: {
@@ -910,6 +955,10 @@ export const AuthProvider: FC<AuthProviderProps> = (props) => {
       `user-settings/${state.userSettings.id}`,
       values
     );
+    AsyncStorage.mergeItem(
+      OFFLINE_AUTH_CACHE,
+      JSON.stringify({ userSettings })
+    );
     dispatch({
       type: 'PATCH_USER_SETTINGS',
       payload: {
@@ -991,7 +1040,19 @@ export const AuthProvider: FC<AuthProviderProps> = (props) => {
     return success;
   };
   const fetchUserSettings = async (): Promise<void> => {
-    const userSettings = await getUserSettings(state.user.userSettingsId);
+    let userSettings: UserSettings;
+    try {
+      userSettings = await getUserSettings(state.user.userSettingsId);
+      AsyncStorage.mergeItem(
+        OFFLINE_AUTH_CACHE,
+        JSON.stringify({ userSettings })
+      );
+    } catch (err) {
+      userSettings = isNetworkError(err)
+        ? (await getCachedAuth())?.userSettings
+        : null;
+      if (!userSettings) throw err;
+    }
     dispatch({
       type: 'GET_USER_SETTINGS',
       payload: {

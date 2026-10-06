@@ -1,0 +1,81 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="2026_10_02_offline_device_1790943770" author="Mizan Ali">
+        <createTable tableName="offline_device">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="bigint">
+                <constraints nullable="false" foreignKeyName="fk_offline_device_company" references="company(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="user_id" type="bigint">
+                <constraints nullable="false" foreignKeyName="fk_offline_device_user" references="own_user(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="address" type="varchar(128)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_offline_device_address"/>
+            </column>
+            <column name="public_key" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT"/>
+            <column name="updated_by" type="BIGINT"/>
+        </createTable>
+        <createSequence sequenceName="offline_device_seq" startValue="1" incrementBy="50"/>
+    </changeSet>
+
+    <changeSet id="2026_10_02_offline_op_1790943770" author="Mizan Ali">
+        <createTable tableName="offline_op">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="company_id" type="bigint">
+                <constraints nullable="false" foreignKeyName="fk_offline_op_company" references="company(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="op_id" type="varchar(64)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_offline_op_op_id"/>
+            </column>
+            <column name="work_order_id" type="bigint">
+                <constraints foreignKeyName="fk_offline_op_work_order" references="work_order(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="type" type="varchar(32)"/>
+            <column name="author_user_id" type="bigint"/>
+            <column name="author_address" type="varchar(128)"/>
+            <column name="lamport" type="bigint"/>
+            <column name="occurred_at" type="TIMESTAMP"/>
+            <column name="body" type="text"/>
+            <column name="sig" type="varchar(128)"/>
+            <column name="result" type="varchar(16)"/>
+            <column name="detail" type="varchar(255)"/>
+            <column name="uploaded_by_id" type="bigint"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT"/>
+            <column name="updated_by" type="BIGINT"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="offline_op" baseColumnNames="author_user_id"
+                                 constraintName="fk_offline_op_author_user" referencedTableName="own_user"
+                                 referencedColumnNames="id" onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="offline_op" baseColumnNames="uploaded_by_id"
+                                 constraintName="fk_offline_op_uploaded_by" referencedTableName="own_user"
+                                 referencedColumnNames="id" onDelete="SET NULL"/>
+        <createSequence sequenceName="offline_op_seq" startValue="1" incrementBy="50"/>
+    </changeSet>
+</databaseChangeLog>

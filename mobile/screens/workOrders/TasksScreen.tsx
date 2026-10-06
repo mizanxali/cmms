@@ -72,12 +72,12 @@ export default function TasksScreen({
 
   function handleSaveNotes(value: string, id: number) {
     const task = tasks.find((task) => task.id === id);
-    return dispatch(patchTask(workOrderId, id, { ...task, notes: value })).then(
-      () => {
+    return dispatch(patchTask(workOrderId, id, { ...task, notes: value }))
+      .then(() => {
         showSnackBar(t('notes_save_success'), 'success');
         toggleNotes(task.id);
-      }
-    );
+      })
+      .catch(() => showSnackBar(t('task_update_failure'), 'error'));
   }
 
   const onImageUploadSuccess = () => {

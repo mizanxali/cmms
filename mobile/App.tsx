@@ -9,6 +9,7 @@ import store, { persistor } from './store';
 import { CompanySettingsProvider } from './contexts/CompanySettingsContext';
 import { CustomSnackbarProvider } from './contexts/CustomSnackBarContext';
 import { AuthProvider } from './contexts/AuthContext';
+import { MeshProvider } from './contexts/MeshContext';
 import FlashMessage from 'react-native-flash-message';
 import { URL } from 'react-native-url-polyfill';
 import 'text-encoding';
@@ -46,6 +47,7 @@ import { isNumeric } from './utils/validators';
 import { customTheme } from './custom-theme';
 import { RootLayout } from './components/RootLayout';
 import { ReviewModal } from './components/ReviewModal';
+import { OfflineBanner } from './components/OfflineBanner';
 import { Subscription } from 'expo-notifications';
 
 Notifications.setNotificationHandler({
@@ -147,17 +149,20 @@ export default Sentry.wrap(function App() {
               <CompanySettingsProvider>
                 <PaperProvider theme={customTheme}>
                   <CustomSnackbarProvider>
-                    <SheetProvider>
-                      <RootLayout>
-                        <FlashMessage
-                          position="top"
-                          statusBarHeight={Constants.statusBarHeight}
-                        />
-                        <Navigation colorScheme={colorScheme} />
-                        <ReviewModal />
-                      </RootLayout>
-                      <StatusBar />
-                    </SheetProvider>
+                    <MeshProvider>
+                      <SheetProvider>
+                        <RootLayout>
+                          <FlashMessage
+                            position="top"
+                            statusBarHeight={Constants.statusBarHeight}
+                          />
+                          <Navigation colorScheme={colorScheme} />
+                          <OfflineBanner />
+                          <ReviewModal />
+                        </RootLayout>
+                        <StatusBar />
+                      </SheetProvider>
+                    </MeshProvider>
                   </CustomSnackbarProvider>
                 </PaperProvider>
               </CompanySettingsProvider>
