@@ -57,6 +57,7 @@ import { getAdditionalCosts } from '../../slices/additionalCost';
 import { getRelations } from '../../slices/relation';
 import Relation, { relationTypes } from '../../models/relation';
 import { getTasks } from '../../slices/task';
+import { CrewMember, savePack } from '../../slices/offline';
 import { CustomSnackBarContext } from '../../contexts/CustomSnackBarContext';
 import {
   changeWorkOrderStatus,
@@ -75,7 +76,7 @@ import WorkOrder from '../../models/workOrder';
 import Labor from '../../models/labor';
 import { AudioPlayer } from '../../components/AudioPlayer';
 import { Task } from '../../models/tasks';
-import { getErrorMessage } from '../../utils/api';
+import api, { getErrorMessage } from '../../utils/api';
 import ImageView from 'react-native-image-viewing';
 import { getCustomFieldValuesForDetails } from '../../models/form';
 import CommentItem from '../../components/CommentItem';
@@ -273,14 +274,22 @@ export default function WODetailsScreen({
     }
   ];
   const getInfos = () => {
-    if (!workOrderProp) dispatch(getWorkOrderDetails(id));
     if (!generalPreferences.simplifiedWorkOrder) {
       dispatch(getPartQuantitiesByWorkOrder(id));
       dispatch(getLabors(id));
       dispatch(getAdditionalCosts(id));
       dispatch(getRelations(id));
     }
-    dispatch(getTasks(id));
+    // getTasks resolves undefined on failure, so a pack is only saved from fresh data
+    Promise.all([
+      workOrderProp ?? dispatch(getWorkOrderDetails(id)),
+      dispatch(getTasks(id)),
+      api.get<CrewMember[]>(`offline/work-orders/${id}/crew`).catch(() => null)
+    ])
+      .then(([workOrder, tasks, crew]) => {
+        if (tasks && crew) dispatch(savePack(workOrder, tasks, crew));
+      })
+      .catch(() => {});
   };
   useEffect(() => {
     navigation.setOptions({
@@ -300,6 +309,8 @@ export default function WODetailsScreen({
                     setOpenDelete(true);
                   },
                   onGenerateReport,
+                  onOfflineHandoff: () =>
+                    navigation.navigate('OfflineHandoff', { workOrderId: id }),
                   workOrder
                 }
               });
